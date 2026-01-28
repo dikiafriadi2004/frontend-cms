@@ -1,17 +1,27 @@
 {
-  "name": "frontend-cms",
+  "name": "frontend-api",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:api": "node -e \"require('./src/lib/api-test.ts').testApiConnection()\"",
+    "test:api:posts": "node -e \"require('./src/lib/api-test.ts').testSpecificEndpoint('posts')\"",
+    "test:api:menu": "node -e \"require('./src/lib/api-test.ts').testSpecificEndpoint('menus')\"",
+    "test:api:pages": "node -e \"require('./src/lib/api-test.ts').testSpecificEndpoint('pages')\"",
+    "test:api:settings": "node -e \"require('./src/lib/api-test.ts').testSpecificEndpoint('settings')\"",
+    "test:cms": "node -e \"console.log('🧪 Testing API...'); require('./src/lib/api-test.ts').testApiConnection();\"",
+    "check:env": "node -e \"console.log('🔧 API Configuration:'); console.log('API Base URL:', process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_CMS_BASE_URL || 'Not set'); console.log('Auth Method:', process.env.NEXT_PUBLIC_API_TOKEN || process.env.NEXT_PUBLIC_CMS_TOKEN ? 'Bearer Token ✅' : process.env.NEXT_PUBLIC_API_KEY || process.env.NEXT_PUBLIC_CMS_API_KEY ? 'API Key ✅' : process.env.API_USERNAME ? 'Basic Auth ✅' : 'None ❌'); console.log('Fallback Data:', process.env.ENABLE_FALLBACK_DATA || 'false'); console.log('Debug Mode:', process.env.DEBUG_API_CALLS || 'false');\""
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "clsx": "^2.1.1",
     "next": "16.1.4",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

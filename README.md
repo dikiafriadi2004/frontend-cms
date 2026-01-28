@@ -1,36 +1,116 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Website Frontend
 
-## Getting Started
+Next.js frontend application untuk sistem website yang terintegrasi dengan CMS.
 
-First, run the development server:
+## Fitur Utama
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- ✅ **Dynamic Menu** - Menu yang dapat dikonfigurasi dari CMS
+- ✅ **Dynamic Content** - Konten halaman yang dapat dikelola dari CMS  
+- ✅ **Blog System** - Sistem blog terintegrasi
+- ✅ **Responsive Design** - Tampilan yang responsif di semua device
+- ✅ **SEO Optimized** - Optimasi untuk mesin pencari
+
+## Tech Stack
+
+- **Next.js 16** - React framework dengan App Router
+- **TypeScript** - Type-safe JavaScript
+- **Tailwind CSS** - Utility-first CSS framework
+- **CMS Integration** - Headless CMS backend
+
+## Quick Start
+
+1. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+2. **Setup environment**
+   ```bash
+   cp .env.example .env.local
+   ```
+   
+   Edit `.env.local` dan sesuaikan dengan konfigurasi CMS Anda:
+   ```
+   NEXT_PUBLIC_CMS_BASE_URL=http://localhost:8000
+   NEXT_PUBLIC_CMS_TOKEN=your_cms_token
+   ```
+
+3. **Run development server**
+   ```bash
+   npm run dev
+   ```
+
+4. **Open browser**
+   Buka [http://localhost:3000](http://localhost:3000)
+
+## Project Structure
+
+```
+src/
+├── app/                 # Next.js App Router pages
+├── components/          # React components
+│   ├── home/           # Homepage sections
+│   ├── layout/         # Layout components (Header, Footer)
+│   └── ui/             # Reusable UI components
+├── contexts/           # React contexts (API, etc.)
+├── lib/                # Utility functions and API calls
+└── types/              # TypeScript type definitions
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment Variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `NEXT_PUBLIC_CMS_BASE_URL` | CMS base URL | `http://localhost:8000` |
+| `NEXT_PUBLIC_CMS_TOKEN` | CMS authentication token | - |
+| `ENABLE_FALLBACK_DATA` | Enable fallback data when CMS unavailable | `true` |
+| `DEBUG_API_CALLS` | Enable API call debugging | `false` |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Available Scripts
 
-## Learn More
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
 
-To learn more about Next.js, take a look at the following resources:
+## CMS Integration
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Project ini terintegrasi dengan CMS untuk:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Menu Management** - Kelola menu navigasi
+- **Page Content** - Kelola konten halaman
+- **Blog Posts** - Kelola artikel blog
+- **Site Settings** - Konfigurasi situs (logo, warna, kontak, dll)
 
-## Deploy on Vercel
+## Deployment
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. **Build project**
+   ```bash
+   npm run build
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+2. **Start production server**
+   ```bash
+   npm start
+   ```
+
+## Troubleshooting
+
+### Client-side Exception Error
+Jika mengalami error "Application error: a client-side exception has occurred", pastikan:
+
+1. ✅ CMS backend berjalan di URL yang benar
+2. ✅ Environment variables sudah dikonfigurasi dengan benar
+3. ✅ Tidak ada komponen yang error (sudah diperbaiki dalam versi ini)
+
+### CMS Connection Issues
+Jika tidak bisa terhubung ke CMS:
+
+1. Cek apakah CMS backend berjalan
+2. Pastikan `NEXT_PUBLIC_CMS_BASE_URL` benar
+3. Periksa CORS settings di CMS backend
+4. Aktifkan `ENABLE_FALLBACK_DATA=true` untuk development
+
+## License
+
+MIT License
