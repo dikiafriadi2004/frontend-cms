@@ -7,6 +7,7 @@ import { ApiProvider } from '@/contexts/ApiContext';
 import { AdsProvider } from '@/contexts/AdsContext';
 import DynamicMetadata from '@/components/SEO/DynamicMetadata';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { Analytics } from '@/components/analytics';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -38,6 +39,7 @@ export default function RootLayout({
           <ApiProvider>
             <AdsProvider>
               <DynamicMetadata />
+              <Analytics />
               <Header />
               {children}
               <Footer />

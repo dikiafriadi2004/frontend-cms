@@ -52,6 +52,12 @@ const ContactPageClient = () => {
       if (response.ok && result.success) {
         setSubmitStatus('success');
         setShowAlert(true);
+        
+        // Track successful form submission
+        import('@/lib/analytics').then(({ trackContactFormSubmit }) => {
+          trackContactFormSubmit();
+        });
+        
         // Reset form
         setFormData({
           name: '',

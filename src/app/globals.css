@@ -150,52 +150,104 @@ body {
     line-height: 1.5;
   }
 
-  /* Blog content image styles - SIMPLE AND CLEAN */
+  /* Blog content image styles - COMPREHENSIVE FIX */
   .blog-content img,
-  .blog-content .blog-content-image {
+  .blog-content .blog-content-image,
+  .blog-content-wrapper img,
+  .blog-content-section img {
     max-width: 100% !important;
     height: auto !important;
     display: block !important;
     margin: 1.5rem auto !important;
     border-radius: 8px !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+    visibility: visible !important;
+    opacity: 1 !important;
   }
   
   .blog-content img:hover,
-  .blog-content .blog-content-image:hover {
+  .blog-content .blog-content-image:hover,
+  .blog-content-wrapper img:hover,
+  .blog-content-section img:hover {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
   }
 
   /* Handle images with float styles from CMS */
-  .blog-content img[style*="float: right"] {
+  .blog-content img[style*="float: right"],
+  .blog-content-wrapper img[style*="float: right"],
+  .blog-content-section img[style*="float: right"] {
     float: right !important;
     margin: 0 0 1rem 1rem !important;
     max-width: 50% !important;
   }
   
-  .blog-content img[style*="float: left"] {
+  .blog-content img[style*="float: left"],
+  .blog-content-wrapper img[style*="float: left"],
+  .blog-content-section img[style*="float: left"] {
     float: left !important;
     margin: 0 1rem 1rem 0 !important;
     max-width: 50% !important;
   }
   
-  .blog-content img[style*="display: block"] {
+  .blog-content img[style*="display: block"],
+  .blog-content-wrapper img[style*="display: block"],
+  .blog-content-section img[style*="display: block"] {
     display: block !important;
     margin: 1.5rem auto !important;
     float: none !important;
   }
 
   /* Fix for broken image tags */
-  .blog-content p img {
+  .blog-content p img,
+  .blog-content-wrapper p img,
+  .blog-content-section p img {
     margin: 1.5rem auto !important;
     max-width: 100% !important;
     height: auto !important;
   }
 
   /* Make sure the blog content container doesn't constrain images */
-  .blog-content {
+  .blog-content,
+  .blog-content-wrapper,
+  .blog-content-section {
     overflow: visible !important;
     width: 100% !important;
+  }
+
+  /* Force image visibility */
+  .blog-content img[src],
+  .blog-content-wrapper img[src],
+  .blog-content-section img[src] {
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  /* Handle broken or missing images gracefully */
+  .blog-content img:not([src]),
+  .blog-content img[src=""],
+  .blog-content img[src*="undefined"],
+  .blog-content-wrapper img:not([src]),
+  .blog-content-wrapper img[src=""],
+  .blog-content-wrapper img[src*="undefined"],
+  .blog-content-section img:not([src]),
+  .blog-content-section img[src=""],
+  .blog-content-section img[src*="undefined"] {
+    display: none !important;
+  }
+
+  /* Ensure images load properly */
+  .blog-content img,
+  .blog-content-wrapper img,
+  .blog-content-section img {
+    object-fit: contain !important;
+    background-color: transparent !important;
+  }
+
+  /* Loading state for images */
+  .blog-content img[loading="lazy"],
+  .blog-content-wrapper img[loading="lazy"],
+  .blog-content-section img[loading="lazy"] {
+    transition: opacity 0.3s ease !important;
   }
 
   /* Override prose styles for better content display */

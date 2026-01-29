@@ -653,21 +653,53 @@ export class SettingsAPI {
 
   static async getAnalytics(): Promise<any> {
     try {
-      const response = await safeApiRequest<any>('/settings/analytics', undefined, true, CACHE_TTL.settings);
-      return response?.data || response || {
-        googleAnalyticsId: '',
-        google_analytics_id: '',
-        googleTagManagerId: '',
-        google_tag_manager_id: '',
-        facebookPixelId: '',
-        facebook_pixel_id: '',
-        hotjarId: '',
-        hotjar_id: '',
-        enableAnalytics: false,
-        enable_analytics: false,
+      // Fetch each analytics setting individually using the key-based endpoints
+      const [
+        googleAnalyticsResponse,
+        googleTagManagerResponse,
+        facebookPixelResponse,
+        hotjarResponse,
+        enableAnalyticsResponse
+      ] = await Promise.allSettled([
+        this.getSettingByKey('google_analytics_id'),
+        this.getSettingByKey('google_tag_manager_id'),
+        this.getSettingByKey('facebook_pixel_id'),
+        this.getSettingByKey('hotjar_id'),
+        this.getSettingByKey('enable_analytics')
+      ]);
+
+      // Extract values from responses
+      const googleAnalyticsId = googleAnalyticsResponse.status === 'fulfilled' ? 
+        googleAnalyticsResponse.value || '' : '';
+      
+      const googleTagManagerId = googleTagManagerResponse.status === 'fulfilled' ? 
+        googleTagManagerResponse.value || '' : '';
+      
+      const facebookPixelId = facebookPixelResponse.status === 'fulfilled' ? 
+        facebookPixelResponse.value || '' : '';
+      
+      const hotjarId = hotjarResponse.status === 'fulfilled' ? 
+        hotjarResponse.value || '' : '';
+      
+      const enableAnalytics = enableAnalyticsResponse.status === 'fulfilled' ? 
+        (enableAnalyticsResponse.value !== false && enableAnalyticsResponse.value !== 'false') : true;
+
+      const analyticsData = {
+        googleAnalyticsId,
+        google_analytics_id: googleAnalyticsId,
+        googleTagManagerId,
+        google_tag_manager_id: googleTagManagerId,
+        facebookPixelId,
+        facebook_pixel_id: facebookPixelId,
+        hotjarId,
+        hotjar_id: hotjarId,
+        enableAnalytics,
+        enable_analytics: enableAnalytics,
       };
+
+      return analyticsData;
     } catch (error) {
-      console.warn('Analytics settings endpoint not available, using defaults');
+      // Silent fallback for production
       return {
         googleAnalyticsId: '',
         google_analytics_id: '',
@@ -681,6 +713,43 @@ export class SettingsAPI {
         enable_analytics: false,
       };
     }
+  }
+
+  // Helper method to get individual setting by key
+  static async getSettingByKey(key: string): Promise<string | boolean> {
+    try {
+      const response = await safeApiRequest<any>(`/settings/${key}`, undefined, true, CACHE_TTL.settings);
+      
+      // Handle different possible response structures
+      const value = response?.data?.value || response?.value || response?.data || response;
+      
+      // Convert string 'false' to boolean false for enable_analytics
+      if (key === 'enable_analytics') {
+        if (value === 'false' || value === false || value === 0 || value === '0') {
+          return false;
+        }
+        return value !== null && value !== undefined && value !== '';
+      }
+      
+      return value || '';
+    } catch (error) {
+      return key === 'enable_analytics' ? false : '';
+    }
+  }
+
+  // Convenience method to get multiple settings by keys
+  static async getSettingsByKeys(keys: string[]): Promise<Record<string, string | boolean>> {
+    const results: Record<string, string | boolean> = {};
+    
+    const responses = await Promise.allSettled(
+      keys.map(key => this.getSettingByKey(key))
+    );
+    
+    keys.forEach((key, index) => {
+      results[key] = responses[index].status === 'fulfilled' ? responses[index].value : '';
+    });
+    
+    return results;
   }
 
   static async getCTA(): Promise<any> {
