@@ -305,34 +305,10 @@ export async function fetchBlogPosts(page: number = 1, limit: number = DEFAULT_P
 
 export async function fetchBlogPost(slug: string): Promise<ApiBlogPost | null> {
   try {
-    console.log(`🔍 Fetching blog post with slug: ${slug}`);
-    console.log(`📡 API Base URL: ${process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_CMS_BASE_URL || 'http://localhost:8000'}`);
-    console.log(`🔗 Full URL: ${process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_CMS_BASE_URL || 'http://localhost:8000'}/api/v1/posts/${slug}`);
-    
     const post = await PostsAPI.getBySlug(slug);
-    
-    if (post) {
-      console.log(`✅ Blog post found:`, {
-        id: post.id,
-        title: post.title,
-        slug: post.slug,
-        author: post.author?.name,
-        publishedAt: post.publishedAt
-      });
-    } else {
-      console.warn(`⚠️ Blog post not found for slug: ${slug}`);
-    }
-    
     return post;
   } catch (error) {
-    console.error(`❌ Failed to fetch blog post ${slug}:`, error);
-    
-    // Log additional debug information
-    if (error instanceof Error) {
-      console.error(`Error message: ${error.message}`);
-      console.error(`Error stack: ${error.stack}`);
-    }
-    
+    // Silent error handling for production
     return null;
   }
 }
@@ -342,7 +318,6 @@ export async function fetchBlogCategories(): Promise<string[]> {
     const categories = await CategoriesAPI.getAll();
     return categories.map((cat: any) => cat.name || cat.title || cat.slug);
   } catch (error) {
-    console.error('Failed to fetch blog categories:', error);
     return ['Tutorial', 'Bisnis', 'Update', 'Keamanan', 'Technical', 'Analisis'];
   }
 }
@@ -353,7 +328,6 @@ export async function fetchFeaturedPosts(limit: number = 3): Promise<ApiBlogPost
     const posts = await PostsAPI.getFeatured(limit);
     return posts;
   } catch (error) {
-    console.error('Failed to fetch featured posts:', error);
     return [];
   }
 }
@@ -363,7 +337,6 @@ export async function fetchLatestPosts(limit: number = 3): Promise<ApiBlogPost[]
     const posts = await PostsAPI.getLatest(limit);
     return posts;
   } catch (error) {
-    console.error('Failed to fetch latest posts:', error);
     return [];
   }
 }

@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Disable development indicators in production
+  productionBrowserSourceMaps: false,
+  
   // Security headers
   async headers() {
     return [
@@ -53,9 +56,24 @@ const nextConfig: NextConfig = {
   
   // Image optimization
   images: {
-    domains: [
-      'localhost',
+    remotePatterns: [
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '8000',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'localhost',
+        pathname: '/**',
+      },
       // Add your production domain here
+      // {
+      //   protocol: 'https',
+      //   hostname: 'yourdomain.com',
+      //   pathname: '/**',
+      // },
     ],
     formats: ['image/webp', 'image/avif'],
     minimumCacheTTL: 31536000,
@@ -69,6 +87,18 @@ const nextConfig: NextConfig = {
     optimizeCss: true,
     optimizePackageImports: ['@/components', '@/lib'],
   },
+  
+  // Production optimizations
+  poweredByHeader: false,
+  
+  // Remove development features in production
+  ...(process.env.NODE_ENV === 'production' && {
+    compiler: {
+      removeConsole: {
+        exclude: ['error', 'warn'],
+      },
+    },
+  }),
 };
 
 export default nextConfig;

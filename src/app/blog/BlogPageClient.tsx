@@ -63,14 +63,6 @@ const BlogPageClient = () => {
         if (postsResponse.success) {
           setBlogPosts(postsResponse.data);
           setPagination(postsResponse.pagination);
-          
-          // Debug logging for pagination
-          console.log('📄 Pagination data:', {
-            current_page: postsResponse.pagination.current_page,
-            has_more: postsResponse.pagination.has_more,
-            per_page: postsResponse.pagination.per_page,
-            total_posts: postsResponse.data.length
-          });
         }
         
         setCategories(['Semua', ...categoriesData]);
