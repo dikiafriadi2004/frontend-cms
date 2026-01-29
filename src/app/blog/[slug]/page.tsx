@@ -2,7 +2,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { fetchBlogPost, fetchLatestPosts } from '@/lib/api';
 import { generateBlogPostMetadata } from '@/lib/metadata';
-import { ApiBlogPost } from '@/types/global';
+import HeaderAd from '@/components/ads/HeaderAd';
+import InArticleAd from '@/components/ads/InArticleAd';
+import SidebarAd from '@/components/ads/SidebarAd';
+import BlogImage from '@/components/BlogImage';
 
 // Helper function to extract plain text from HTML
 const extractTextFromHTML = (html: string, maxLength: number = 150): string => {
@@ -25,16 +28,77 @@ const extractTextFromHTML = (html: string, maxLength: number = 150): string => {
     : textContent;
 };
 
-// Helper function to sanitize HTML content
+// Helper function to sanitize HTML content and fix image URLs
 const sanitizeHTML = (html: string): string => {
   if (!html) return '';
   
-  return html
+  let processedHtml = html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
     .replace(/on\w+="[^"]*"/gi, '')
     .replace(/javascript:/gi, '')
-    .replace(/vbscript:/gi, '')
-    .replace(/data:/gi, '');
+    .replace(/vbscript:/gi, '');
+  
+  // Fix image URLs - replace localhost:8000 with the API base URL
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_CMS_BASE_URL || 'http://localhost:8000';
+  processedHtml = processedHtml.replace(/http:\/\/localhost:8000/gi, apiBaseUrl);
+  
+  // Clean up image styles but preserve important positioning styles
+  processedHtml = processedHtml.replace(/<img([^>]*)>/gi, (match, attrs) => {
+    let cleanAttrs = attrs.trim();
+    
+    // Extract important style attributes
+    const styleMatch = cleanAttrs.match(/style=["']([^"']*)["']/i);
+    let preservedStyles = '';
+    
+    if (styleMatch) {
+      const styles = styleMatch[1];
+      
+      // Preserve float and display styles, remove others
+      const floatMatch = styles.match(/float:\s*([^;]+)/i);
+      const displayMatch = styles.match(/display:\s*([^;]+)/i);
+      
+      const preservedStylesArray = [];
+      if (floatMatch) preservedStylesArray.push(`float: ${floatMatch[1].trim()}`);
+      if (displayMatch) preservedStylesArray.push(`display: ${displayMatch[1].trim()}`);
+      
+      if (preservedStylesArray.length > 0) {
+        preservedStyles = ` style="${preservedStylesArray.join('; ')}"`;
+      }
+      
+      // Remove the original style attribute
+      cleanAttrs = cleanAttrs.replace(/\s*style=["'][^"']*["']/gi, '');
+    }
+    
+    // Check if alt attribute exists
+    const hasAlt = /alt\s*=/.test(cleanAttrs);
+    const altAttr = hasAlt ? '' : ' alt=""';
+    
+    // Check if src exists
+    const hasSrc = /src\s*=/.test(cleanAttrs);
+    if (!hasSrc) return match;
+    
+    return `<img${cleanAttrs}${altAttr}${preservedStyles} loading="lazy" class="blog-content-image">`;
+  });
+  
+  return processedHtml;
+};
+
+// Helper function to insert ads at natural break points in HTML content
+const insertInArticleAd = (content: string): string => {
+  if (!content || !content.includes('<')) return content;
+  
+  // Find a good place to insert the ad (after 2nd or 3rd paragraph)
+  const paragraphs = content.split('</p>');
+  if (paragraphs.length >= 3) {
+    // Insert ad after 2nd paragraph
+    const beforeAd = paragraphs.slice(0, 2).join('</p>') + '</p>';
+    const afterAd = paragraphs.slice(2).join('</p>');
+    return beforeAd + '<!-- IN_ARTICLE_AD_PLACEHOLDER -->' + afterAd;
+  }
+  
+  // If not enough paragraphs, insert at 40% of content
+  const insertPoint = Math.floor(content.length * 0.4);
+  return content.substring(0, insertPoint) + '<!-- IN_ARTICLE_AD_PLACEHOLDER -->' + content.substring(insertPoint);
 };
 
 // Generate static params for all blog posts
@@ -83,30 +147,60 @@ export default async function BlogPostPage({
 }) {
   const { slug } = await params;
   
+  console.log(`🔍 BlogPostPage called with slug: ${slug}`);
+  
   try {
     const [post, relatedPosts] = await Promise.all([
       fetchBlogPost(slug),
       fetchLatestPosts(3)
     ]);
 
+    console.log(`📄 Post result for slug ${slug}:`, post ? 'Found' : 'Not found');
+    console.log(`📄 Related posts:`, relatedPosts.length);
+
     if (!post) {
+      console.warn(`⚠️ Post not found for slug: ${slug}, calling notFound()`);
       notFound();
     }
 
+    // Validate post data and provide fallbacks
+    const validatedPost = {
+      ...post,
+      title: post.title || 'Untitled Article',
+      content: post.content || 'Content not available.',
+      author: {
+        name: post.author?.name || 'Anonymous',
+        avatar: post.author?.avatar || null
+      },
+      category: post.category || 'Uncategorized',
+      tags: Array.isArray(post.tags) ? post.tags : [],
+      publishedAt: post.publishedAt || new Date().toISOString(),
+      readTime: post.readTime || '5 min read',
+      featuredImage: post.featuredImage || null
+    };
+
     const formatDate = (dateString: string) => {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('id-ID', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
+      try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('id-ID', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      } catch (error) {
+        console.warn('Invalid date format:', dateString);
+        return 'Invalid Date';
+      }
     };
 
     // Filter out current post from related posts
-    const filteredRelatedPosts = relatedPosts.filter(p => p.id !== post.id);
+    const filteredRelatedPosts = relatedPosts.filter(p => p.id !== validatedPost.id);
 
     return (
       <div className="min-h-screen bg-gray-50">
+        {/* Header Ad */}
+        <HeaderAd />
+
         {/* Breadcrumb */}
         <section className="bg-white py-6 border-b border-gray-200 mt-20">
           <div className="max-w-full mx-auto px-6 sm:px-12 lg:px-20 xl:px-32">
@@ -122,7 +216,7 @@ export default async function BlogPostPage({
                   <Link href="/blog" className="text-gray-500 hover:text-blue-600 transition-colors">Blog</Link>
                 </li>
                 <li className="text-gray-400">/</li>
-                <li className="text-gray-900 font-medium truncate">{post.title}</li>
+                <li className="text-gray-900 font-medium truncate">{validatedPost.title}</li>
               </ol>
             </nav>
           </div>
@@ -147,7 +241,7 @@ export default async function BlogPostPage({
                           <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full blur-md opacity-50"></div>
                           <div className="relative inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-sm font-bold rounded-full shadow-lg border border-white/20">
                             <div className="w-2 h-2 bg-white/80 rounded-full mr-2 animate-pulse"></div>
-                            {post.category}
+                            {validatedPost.category}
                             <div className="ml-2 w-1 h-1 bg-white/60 rounded-full"></div>
                           </div>
                         </div>
@@ -157,7 +251,7 @@ export default async function BlogPostPage({
                     {/* Title with Better Typography */}
                     <h1 className="relative z-10 text-3xl md:text-4xl lg:text-5xl font-black text-gray-900 mb-8 leading-tight tracking-tight">
                       <span className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent">
-                        {post.title}
+                        {validatedPost.title}
                       </span>
                     </h1>
                     
@@ -167,10 +261,10 @@ export default async function BlogPostPage({
                       <div className="flex items-center space-x-3 bg-white/60 backdrop-blur-sm rounded-full px-4 py-2.5 shadow-sm border border-white/40">
                         <div className="relative">
                           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
-                            {post.author.avatar ? (
+                            {validatedPost.author.avatar ? (
                               <img 
-                                src={post.author.avatar} 
-                                alt={post.author.name}
+                                src={validatedPost.author.avatar.replace(/http:\/\/localhost:8000/gi, process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_CMS_BASE_URL || 'http://localhost:8000')} 
+                                alt={validatedPost.author.name}
                                 className="w-10 h-10 rounded-full object-cover"
                               />
                             ) : (
@@ -182,7 +276,7 @@ export default async function BlogPostPage({
                           <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white shadow-sm"></div>
                         </div>
                         <div>
-                          <div className="text-sm font-bold text-gray-900">{post.author.name}</div>
+                          <div className="text-sm font-bold text-gray-900">{validatedPost.author.name}</div>
                           <div className="text-xs text-gray-500">Author</div>
                         </div>
                       </div>
@@ -195,13 +289,13 @@ export default async function BlogPostPage({
                           </svg>
                         </div>
                         <div>
-                          <div className="text-sm font-semibold text-gray-900">{formatDate(post.publishedAt)}</div>
+                          <div className="text-sm font-semibold text-gray-900">{formatDate(validatedPost.publishedAt)}</div>
                           <div className="text-xs text-gray-500">Published</div>
                         </div>
                       </div>
                       
                       {/* Read Time */}
-                      {post.readTime && (
+                      {validatedPost.readTime && (
                         <div className="flex items-center space-x-2 bg-white/60 backdrop-blur-sm rounded-full px-4 py-2.5 shadow-sm border border-white/40">
                           <div className="w-8 h-8 bg-gradient-to-br from-orange-100 to-orange-200 rounded-full flex items-center justify-center">
                             <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -209,7 +303,7 @@ export default async function BlogPostPage({
                             </svg>
                           </div>
                           <div>
-                            <div className="text-sm font-semibold text-gray-900">{post.readTime}</div>
+                            <div className="text-sm font-semibold text-gray-900">{validatedPost.readTime}</div>
                             <div className="text-xs text-gray-500">Read time</div>
                           </div>
                         </div>
@@ -220,10 +314,10 @@ export default async function BlogPostPage({
                   {/* Enhanced Featured Image */}
                   <div className="relative mx-8 mb-8">
                     <div className="relative h-72 md:h-96 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 rounded-2xl overflow-hidden shadow-2xl transform hover:scale-[1.01] transition-all duration-500 group">
-                      {post.featuredImage ? (
+                      {validatedPost.featuredImage ? (
                         <img 
-                          src={post.featuredImage} 
-                          alt={post.title}
+                          src={validatedPost.featuredImage.replace(/http:\/\/localhost:8000/gi, process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_CMS_BASE_URL || 'http://localhost:8000')} 
+                          alt={validatedPost.title}
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -249,22 +343,70 @@ export default async function BlogPostPage({
                 </div>
 
                 {/* Article Content Card */}
-                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 mb-8 transform hover:shadow-xl transition-all duration-300">
-                  <div className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-headings:font-bold prose-p:text-gray-700 prose-p:leading-relaxed prose-li:text-gray-700 prose-strong:text-gray-900 prose-a:text-blue-600 prose-a:no-underline hover:prose-a:underline prose-ul:my-6 prose-ol:my-6 prose-li:my-2 prose-h1:text-4xl prose-h1:mb-6 prose-h2:text-3xl prose-h2:mb-4 prose-h3:text-2xl prose-h3:mb-3 prose-h4:text-xl prose-h4:mb-2">
-                    {/* Render content as HTML if it contains HTML tags, otherwise as plain text */}
-                    {post.content.includes('<') ? (
-                      <div dangerouslySetInnerHTML={{ __html: sanitizeHTML(post.content) }} />
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 mb-8">
+                  <div className="prose prose-lg max-w-none">
+                    {/* Render content with images in original positions */}
+                    {validatedPost.content && validatedPost.content.includes('<') ? (
+                      <div className="blog-content">
+                        {(() => {
+                          // Sanitize HTML and fix image URLs, but keep images in place
+                          const sanitizedContent = sanitizeHTML(validatedPost.content);
+                          const contentWithAdPlaceholder = insertInArticleAd(sanitizedContent);
+                          const parts = contentWithAdPlaceholder.split('<!-- IN_ARTICLE_AD_PLACEHOLDER -->');
+                          
+                          return (
+                            <>
+                              {/* First part of content */}
+                              {parts[0] && <div dangerouslySetInnerHTML={{ __html: parts[0] }} />}
+                              
+                              {/* In-Article Ad */}
+                              {parts.length > 1 && (
+                                <div className="my-8">
+                                  <InArticleAd />
+                                </div>
+                              )}
+                              
+                              {/* Remaining content */}
+                              {parts[1] && <div dangerouslySetInnerHTML={{ __html: parts[1] }} />}
+                            </>
+                          );
+                        })()}
+                      </div>
                     ) : (
-                      <div className="whitespace-pre-wrap">{post.content}</div>
+                      <div className="blog-content">
+                        {/* Handle plain text content */}
+                        {validatedPost.content ? (
+                          <>
+                            {/* First part of content */}
+                            <div className="whitespace-pre-wrap blog-paragraph">
+                              {validatedPost.content.substring(0, Math.floor(validatedPost.content.length * 0.4))}
+                            </div>
+                            
+                            {/* In-Article Ad */}
+                            <div className="my-8">
+                              <InArticleAd />
+                            </div>
+                            
+                            {/* Remaining content */}
+                            <div className="whitespace-pre-wrap blog-paragraph">
+                              {validatedPost.content.substring(Math.floor(validatedPost.content.length * 0.4))}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-gray-500 italic">
+                            Konten artikel tidak tersedia.
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                   
                   {/* Tags */}
-                  {post.tags && post.tags.length > 0 && (
+                  {validatedPost.tags && validatedPost.tags.length > 0 && (
                     <div className="border-t border-gray-200 pt-6 mt-8">
                       <h3 className="text-lg font-bold text-gray-900 mb-4">Tags</h3>
                       <div className="flex flex-wrap gap-2">
-                        {post.tags.map((tag: any, index: number) => {
+                        {validatedPost.tags.map((tag: any, index: number) => {
                           // Handle both string tags and object tags
                           const tagName = typeof tag === 'string' ? tag : (tag?.name || tag?.slug || 'Tag');
                           return (
@@ -319,6 +461,9 @@ export default async function BlogPostPage({
               <div className="lg:col-span-1">
                 <div className="sticky top-8 space-y-6">
                   
+                  {/* Sidebar Ad */}
+                  <SidebarAd />
+                  
                   {/* Related Posts */}
                   {filteredRelatedPosts.length > 0 && (
                     <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 transform hover:shadow-xl transition-all duration-300">
@@ -340,7 +485,7 @@ export default async function BlogPostPage({
                                 <div className="relative w-20 h-20 flex-shrink-0 group-hover:scale-105 transition-transform duration-300">
                                   {relatedPost.featuredImage ? (
                                     <img 
-                                      src={relatedPost.featuredImage} 
+                                      src={relatedPost.featuredImage.replace(/http:\/\/localhost:8000/gi, process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_CMS_BASE_URL || 'http://localhost:8000')} 
                                       alt={relatedPost.title}
                                       className="w-full h-full object-cover rounded-xl shadow-lg"
                                     />

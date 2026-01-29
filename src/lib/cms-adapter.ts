@@ -1,4 +1,4 @@
-// Simplified API Adapter with better error handling
+// Simplified API Adapter with better error handling and caching
 import { MenuItem, MenuCreateRequest, MenuUpdateRequest, MenuReorderRequest } from '@/types/global';
 
 // Constants
@@ -14,11 +14,124 @@ const API_CONFIG = {
   retryDelay: 1000,
 };
 
-// Safe API request function with better error handling
-async function safeApiRequest<T>(endpoint: string, options?: RequestInit): Promise<T | null> {
+// Cache implementation
+const cache = new Map<string, { data: any; timestamp: number; ttl: number }>();
+
+// Request queue to prevent duplicate simultaneous requests
+const requestQueue = new Map<string, Promise<any>>();
+
+// Cache TTL (Time To Live) in milliseconds
+const CACHE_TTL = {
+  settings: 5 * 60 * 1000, // 5 minutes for settings
+  menu: 2 * 60 * 1000,     // 2 minutes for menu
+  posts: 1 * 60 * 1000,    // 1 minute for posts
+  default: 30 * 1000       // 30 seconds default
+};
+
+// Get data from cache
+function getFromCache<T>(key: string): T | null {
+  const cached = cache.get(key);
+  if (cached && Date.now() - cached.timestamp < cached.ttl) {
+    console.log(`🎯 Cache hit for: ${key} (age: ${Math.round((Date.now() - cached.timestamp) / 1000)}s)`);
+    return cached.data;
+  }
+  if (cached) {
+    cache.delete(key); // Remove expired cache
+    console.log(`⏰ Cache expired for: ${key}`);
+  }
+  return null;
+}
+
+// Set data to cache
+function setToCache<T>(key: string, data: T, ttl: number = CACHE_TTL.default): void {
+  cache.set(key, {
+    data,
+    timestamp: Date.now(),
+    ttl
+  });
+  console.log(`💾 Cached data for: ${key} (TTL: ${Math.round(ttl / 1000)}s, total cached items: ${cache.size})`);
+}
+
+// Clear cache for specific key or all
+function clearCache(key?: string): void {
+  if (key) {
+    cache.delete(key);
+    console.log(`🗑️ Cleared cache for: ${key}`);
+  } else {
+    cache.clear();
+    console.log(`🗑️ Cleared all cache`);
+  }
+}
+
+// Get cache statistics
+function getCacheStats(): { size: number; keys: string[]; totalSize: number } {
+  const keys = Array.from(cache.keys());
+  const totalSize = keys.reduce((size, key) => {
+    const cached = cache.get(key);
+    if (cached) {
+      return size + JSON.stringify(cached.data).length;
+    }
+    return size;
+  }, 0);
+  
+  return {
+    size: cache.size,
+    keys,
+    totalSize
+  };
+}
+
+// Safe API request function with caching and better error handling
+async function safeApiRequest<T>(endpoint: string, options?: RequestInit, useCache: boolean = true, cacheTTL: number = CACHE_TTL.default): Promise<T | null> {
+  // Only use cache for GET requests
+  const isGetRequest = !options?.method || options.method.toUpperCase() === 'GET';
+  const cacheKey = `${endpoint}_${JSON.stringify(options || {})}`;
+  
+  // Try to get from cache first (only for GET requests)
+  if (useCache && isGetRequest) {
+    const cached = getFromCache<T>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  // Check if there's already a pending request for this endpoint
+  if (isGetRequest && requestQueue.has(cacheKey)) {
+    console.log(`⏳ Request already in progress for: ${endpoint}, waiting...`);
+    try {
+      return await requestQueue.get(cacheKey);
+    } catch (error) {
+      console.warn(`⚠️ Queued request failed for ${endpoint}:`, error);
+      requestQueue.delete(cacheKey);
+    }
+  }
+
+  // Create the request promise
+  const requestPromise = makeApiRequest<T>(endpoint, options, cacheKey, cacheTTL, useCache && isGetRequest);
+  
+  // Add to queue for GET requests
+  if (isGetRequest) {
+    requestQueue.set(cacheKey, requestPromise);
+  }
+
+  try {
+    const result = await requestPromise;
+    return result;
+  } finally {
+    // Remove from queue when done
+    if (isGetRequest) {
+      requestQueue.delete(cacheKey);
+    }
+  }
+}
+
+// Actual API request implementation
+async function makeApiRequest<T>(endpoint: string, options: RequestInit | undefined, cacheKey: string, cacheTTL: number, shouldCache: boolean): Promise<T | null> {
   try {
     const baseUrl = API_CONFIG.baseUrl;
     const url = `${baseUrl}${API_CONFIG.apiPrefix}${endpoint}`;
+    
+    console.log(`📡 API Request: ${options?.method || 'GET'} ${url}`);
     
     const defaultHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -43,27 +156,47 @@ async function safeApiRequest<T>(endpoint: string, options?: RequestInit): Promi
 
     clearTimeout(timeoutId);
 
+    console.log(`📊 API Response: ${response.status} ${response.statusText} for ${endpoint}`);
+
     if (!response.ok) {
-      console.warn(`API request failed: ${response.status} ${response.statusText} for ${endpoint}`);
+      console.warn(`❌ API request failed: ${response.status} ${response.statusText} for ${endpoint}`);
+      
+      // Try to get error details from response
+      try {
+        const errorText = await response.text();
+        console.warn(`Error details: ${errorText}`);
+      } catch (e) {
+        console.warn('Could not read error response body');
+      }
+      
       return null;
     }
 
     const contentType = response.headers.get('content-type');
     if (!contentType || !contentType.includes('application/json')) {
-      console.warn(`API returned non-JSON response for ${endpoint}`);
+      console.warn(`⚠️ API returned non-JSON response for ${endpoint}, content-type: ${contentType}`);
       return null;
     }
 
     const data = await response.json();
+    console.log(`✅ API Success for ${endpoint}:`, data);
+    
+    // Cache the result (only for GET requests)
+    if (shouldCache) {
+      setToCache(cacheKey, data, cacheTTL);
+    }
+    
     return data;
   } catch (error) {
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
-        console.warn(`API request timeout for ${endpoint}`);
+        console.warn(`⏱️ API request timeout for ${endpoint}`);
       } else if (error.message.includes('JSON')) {
-        console.warn(`API returned invalid JSON for ${endpoint}`);
+        console.warn(`📄 API returned invalid JSON for ${endpoint}`);
+      } else if (error.message.includes('fetch')) {
+        console.warn(`🌐 Network error for ${endpoint}: ${error.message}`);
       } else {
-        console.warn(`API request failed for ${endpoint}:`, error.message);
+        console.warn(`❌ API request failed for ${endpoint}:`, error.message);
       }
     }
     return null;
@@ -142,10 +275,10 @@ export function transformBlogPostData(post: any): any {
   };
 }
 
-// Menu API with better fallback
+// Menu API with better fallback and caching
 export class MenuAPI {
   static async getNavigation(): Promise<MenuItem[]> {
-    const response = await safeApiRequest<any>('/menus/navigation');
+    const response = await safeApiRequest<any>('/menus/navigation', undefined, true, CACHE_TTL.menu);
     
     if (response && response.data) {
       const items = response.data.items || response.data;
@@ -162,7 +295,7 @@ export class MenuAPI {
   }
 
   static async getAll(): Promise<MenuItem[]> {
-    const response = await safeApiRequest<any>('/menus');
+    const response = await safeApiRequest<any>('/menus', undefined, true, CACHE_TTL.menu);
     
     if (response && response.data) {
       const items = Array.isArray(response.data) ? response.data : [response.data];
@@ -208,7 +341,7 @@ export class MenuAPI {
 // Pages API with better error handling and data transformation
 export class PagesAPI {
   static async getAll(): Promise<any[]> {
-    const response = await safeApiRequest<any>('/pages');
+    const response = await safeApiRequest<any>('/pages', undefined, true, CACHE_TTL.default);
     if (!response) return [];
     
     const items = response.data || response.pages || response;
@@ -216,7 +349,7 @@ export class PagesAPI {
   }
 
   static async getBySlug(slug: string): Promise<any | null> {
-    const response = await safeApiRequest<any>(`/pages/${slug}`);
+    const response = await safeApiRequest<any>(`/pages/${slug}`, undefined, true, CACHE_TTL.default);
     const pageData = response?.data || response;
     
     if (!pageData) return null;
@@ -243,7 +376,7 @@ export class PagesAPI {
   }
 }
 
-// Posts API with better error handling
+// Posts API with better error handling and caching
 export class PostsAPI {
   static async getAll(params: { page?: number; limit?: number } = {}): Promise<any> {
     const queryParams = new URLSearchParams();
@@ -251,7 +384,7 @@ export class PostsAPI {
     if (params.limit) queryParams.append('per_page', params.limit.toString()); // Use per_page instead of limit
     
     const endpoint = `/posts${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    const response = await safeApiRequest<any>(endpoint);
+    const response = await safeApiRequest<any>(endpoint, undefined, true, CACHE_TTL.posts);
     
     if (response && response.data) {
       const posts = Array.isArray(response.data) ? response.data : [response.data];
@@ -294,15 +427,32 @@ export class PostsAPI {
   }
 
   static async getBySlug(slug: string): Promise<any | null> {
-    const response = await safeApiRequest<any>(`/posts/${slug}`);
-    if (!response) return null;
+    console.log(`🔍 PostsAPI.getBySlug called with slug: ${slug}`);
+    
+    const response = await safeApiRequest<any>(`/posts/${slug}`, undefined, true, CACHE_TTL.posts);
+    
+    if (!response) {
+      console.warn(`⚠️ No response from API for post slug: ${slug}`);
+      return null;
+    }
+    
+    console.log(`📄 Raw API response for post ${slug}:`, response);
     
     const post = response.data || response;
-    return transformBlogPostData(post);
+    
+    if (!post) {
+      console.warn(`⚠️ No post data found in response for slug: ${slug}`);
+      return null;
+    }
+    
+    const transformedPost = transformBlogPostData(post);
+    console.log(`✅ Transformed post data for ${slug}:`, transformedPost);
+    
+    return transformedPost;
   }
 
   static async getFeatured(limit: number = 3): Promise<any[]> {
-    const response = await safeApiRequest<any>(`/posts/featured?limit=${limit}`);
+    const response = await safeApiRequest<any>(`/posts/featured?limit=${limit}`, undefined, true, CACHE_TTL.posts);
     if (!response) return [];
     
     const posts = response.data || response;
@@ -310,10 +460,10 @@ export class PostsAPI {
   }
 
   static async getLatest(limit: number = 3): Promise<any[]> {
-    const response = await safeApiRequest<any>(`/posts/latest?limit=${limit}`);
+    const response = await safeApiRequest<any>(`/posts/latest?limit=${limit}`, undefined, true, CACHE_TTL.posts);
     if (!response) {
       // Fallback: try to get from general posts endpoint
-      const fallbackResponse = await safeApiRequest<any>(`/posts?limit=${limit}`);
+      const fallbackResponse = await safeApiRequest<any>(`/posts?limit=${limit}`, undefined, true, CACHE_TTL.posts);
       if (fallbackResponse && fallbackResponse.data) {
         const posts = Array.isArray(fallbackResponse.data) ? fallbackResponse.data : [fallbackResponse.data];
         return posts.slice(0, limit).map(transformBlogPostData);
@@ -331,7 +481,7 @@ export class PostsAPI {
     if (params.page) queryParams.append('page', params.page.toString());
     if (params.limit) queryParams.append('limit', params.limit.toString());
     
-    const response = await safeApiRequest<any>(`/posts/search?${queryParams.toString()}`);
+    const response = await safeApiRequest<any>(`/posts/search?${queryParams.toString()}`, undefined, true, CACHE_TTL.posts);
     
     if (response && response.data) {
       const posts = Array.isArray(response.data) ? response.data : [response.data];
@@ -362,10 +512,10 @@ export class PostsAPI {
   }
 }
 
-// Categories API
+// Categories API with caching
 export class CategoriesAPI {
   static async getAll(): Promise<any[]> {
-    const response = await safeApiRequest<any>('/categories');
+    const response = await safeApiRequest<any>('/categories', undefined, true, CACHE_TTL.default);
     if (!response) return [];
     
     const items = response.data || response;
@@ -373,11 +523,11 @@ export class CategoriesAPI {
   }
 }
 
-// Settings API with better fallback
+// Settings API with better fallback and caching
 export class SettingsAPI {
   static async getGeneral(): Promise<any> {
     console.log('📡 Fetching settings from /settings/general...');
-    const response = await safeApiRequest<any>('/settings/general');
+    const response = await safeApiRequest<any>('/settings/general', undefined, true, CACHE_TTL.settings);
     const data = response?.data || response || {};
     
     // Debug log to see what we're getting from API
@@ -413,7 +563,7 @@ export class SettingsAPI {
   }
 
   static async getSeo(): Promise<any> {
-    const response = await safeApiRequest<any>('/settings/seo');
+    const response = await safeApiRequest<any>('/settings/seo', undefined, true, CACHE_TTL.settings);
     return response?.data || response || {
       defaultTitle: '',
       meta_title: '',
@@ -435,7 +585,7 @@ export class SettingsAPI {
   }
 
   static async getSocial(): Promise<any> {
-    const response = await safeApiRequest<any>('/settings/social');
+    const response = await safeApiRequest<any>('/settings/social', undefined, true, CACHE_TTL.settings);
     return response?.data || response || {
       facebook: '',
       instagram: '',
@@ -447,7 +597,7 @@ export class SettingsAPI {
   }
 
   static async getCompany(): Promise<any> {
-    const response = await safeApiRequest<any>('/settings/company');
+    const response = await safeApiRequest<any>('/settings/company', undefined, true, CACHE_TTL.settings);
     const data = response?.data || response || {};
     
     // Debug log to see what we're getting from API
@@ -476,52 +626,34 @@ export class SettingsAPI {
   }
 
   static async getAds(): Promise<any> {
-    try {
-      const response = await safeApiRequest<any>('/settings/ads');
-      return response?.data || response || {
-        googleAdsenseId: '',
-        google_adsense_id: '',
-        googleAdsenseSlots: {
-          header: '',
-          sidebar: '',
-          footer: '',
-          inArticle: '',
-        },
-        google_adsense_slots: {
-          header: '',
-          sidebar: '',
-          footer: '',
-          in_article: '',
-        },
-        enableAds: false,
-        enable_ads: false,
-      };
-    } catch (error) {
-      console.warn('Ads settings endpoint not available, using defaults');
-      return {
-        googleAdsenseId: '',
-        google_adsense_id: '',
-        googleAdsenseSlots: {
-          header: '',
-          sidebar: '',
-          footer: '',
-          inArticle: '',
-        },
-        google_adsense_slots: {
-          header: '',
-          sidebar: '',
-          footer: '',
-          in_article: '',
-        },
-        enableAds: false,
-        enable_ads: false,
-      };
-    }
+    // This method is for AdSense settings, not the ads data itself
+    // Since your API doesn't have AdSense settings endpoint, return defaults
+    // The actual ads data should be fetched using AdsAPI.getAllAds() or AdsAPI.getAdsByPosition()
+    console.warn('SettingsAPI.getAds() called - this is for AdSense settings, not ads data. Use AdsAPI instead.');
+    
+    return {
+      googleAdsenseId: '',
+      google_adsense_id: '',
+      googleAdsenseSlots: {
+        header: '',
+        sidebar: '',
+        footer: '',
+        inArticle: '',
+      },
+      google_adsense_slots: {
+        header: '',
+        sidebar: '',
+        footer: '',
+        in_article: '',
+      },
+      enableAds: true, // Enable ads since you have ads API
+      enable_ads: true,
+    };
   }
 
   static async getAnalytics(): Promise<any> {
     try {
-      const response = await safeApiRequest<any>('/settings/analytics');
+      const response = await safeApiRequest<any>('/settings/analytics', undefined, true, CACHE_TTL.settings);
       return response?.data || response || {
         googleAnalyticsId: '',
         google_analytics_id: '',
@@ -552,7 +684,7 @@ export class SettingsAPI {
   }
 
   static async getCTA(): Promise<any> {
-    const response = await safeApiRequest<any>('/settings/company');
+    const response = await safeApiRequest<any>('/settings/company', undefined, true, CACHE_TTL.settings);
     return response?.data || response || {
       // No fallback values - only use API data from company settings
     };
@@ -565,7 +697,10 @@ export class ContactAPI {
     const response = await safeApiRequest<any>('/contact', {
       method: 'POST',
       body: JSON.stringify(formData),
-    });
+    }, false); // Don't cache POST requests
     return response !== null;
   }
 }
+
+// Export cache management functions
+export { clearCache, setToCache, getFromCache, getCacheStats };

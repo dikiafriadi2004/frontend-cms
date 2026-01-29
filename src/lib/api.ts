@@ -305,10 +305,34 @@ export async function fetchBlogPosts(page: number = 1, limit: number = DEFAULT_P
 
 export async function fetchBlogPost(slug: string): Promise<ApiBlogPost | null> {
   try {
+    console.log(`🔍 Fetching blog post with slug: ${slug}`);
+    console.log(`📡 API Base URL: ${process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_CMS_BASE_URL || 'http://localhost:8000'}`);
+    console.log(`🔗 Full URL: ${process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_CMS_BASE_URL || 'http://localhost:8000'}/api/v1/posts/${slug}`);
+    
     const post = await PostsAPI.getBySlug(slug);
+    
+    if (post) {
+      console.log(`✅ Blog post found:`, {
+        id: post.id,
+        title: post.title,
+        slug: post.slug,
+        author: post.author?.name,
+        publishedAt: post.publishedAt
+      });
+    } else {
+      console.warn(`⚠️ Blog post not found for slug: ${slug}`);
+    }
+    
     return post;
   } catch (error) {
-    console.error(`Failed to fetch blog post ${slug}:`, error);
+    console.error(`❌ Failed to fetch blog post ${slug}:`, error);
+    
+    // Log additional debug information
+    if (error instanceof Error) {
+      console.error(`Error message: ${error.message}`);
+      console.error(`Error stack: ${error.stack}`);
+    }
+    
     return null;
   }
 }
@@ -525,6 +549,14 @@ export function clearCache(key?: string): void {
 
 export function clearAllCaches(): void {
   cache.clear();
+  // Also clear the CMS adapter cache
+  try {
+    const { clearCache } = require('@/lib/cms-adapter');
+    clearCache(); // Clear all CMS adapter cache
+    console.log('🗑️ Cleared all caches (API + CMS adapter)');
+  } catch (error) {
+    console.warn('Could not clear CMS adapter cache:', error);
+  }
 }
 
 // Cached API functions

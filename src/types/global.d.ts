@@ -208,12 +208,21 @@ export interface SiteSettings {
   favicon: string;
   siteFavicon?: string;
   site_favicon?: string;
+  // Contact Fields
+  contact_email?: string;
+  contact_phone?: string;
+  contact_address?: string;
+  company_address?: string;
   // CTA Content Fields
   cta_title?: string;
   cta_subtitle?: string;
   cta_description?: string;
   cta_button_text?: string;
   cta_button_url?: string;
+  cta_whatsapp_number?: string;
+  // Telegram Fields
+  company_telegram?: string;
+  telegram_channel?: string;
   colors: {
     primary: string;
     secondary: string;

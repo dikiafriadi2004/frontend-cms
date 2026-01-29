@@ -4,6 +4,7 @@ import "./globals.css";
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { ApiProvider } from '@/contexts/ApiContext';
+import { AdsProvider } from '@/contexts/AdsContext';
 import DynamicMetadata from '@/components/SEO/DynamicMetadata';
 import ErrorBoundary from '@/components/ErrorBoundary';
 
@@ -35,10 +36,12 @@ export default function RootLayout({
       >
         <ErrorBoundary>
           <ApiProvider>
-            <DynamicMetadata />
-            <Header />
-            {children}
-            <Footer />
+            <AdsProvider>
+              <DynamicMetadata />
+              <Header />
+              {children}
+              <Footer />
+            </AdsProvider>
           </ApiProvider>
         </ErrorBoundary>
       </body>

@@ -4,9 +4,12 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { fetchBlogPosts, fetchBlogCategories } from '@/lib/api';
 import { ApiBlogPost, BlogResponse } from '@/types/global';
+import HeaderAd from '@/components/ads/HeaderAd';
+import SidebarAd from '@/components/ads/SidebarAd';
+import { AdsAPI, isAdActive } from '@/lib/ads-api';
 
 // Constants
-const DEFAULT_POSTS_PER_PAGE = 10;
+const DEFAULT_POSTS_PER_PAGE = 9;
 
 // Helper function to extract plain text from HTML
 const extractTextFromHTML = (html: string, maxLength: number = 150): string => {
@@ -36,6 +39,8 @@ const BlogPageClient = () => {
   const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState<BlogResponse['pagination'] | null>(null);
+  const [hasSidebarAds, setHasSidebarAds] = useState(false);
+  const [isChangingPage, setIsChangingPage] = useState(false);
   
   // Get posts per page from pagination or use default
   const postsPerPage = pagination?.per_page || DEFAULT_POSTS_PER_PAGE;
@@ -46,15 +51,26 @@ const BlogPageClient = () => {
       try {
         setLoading(true);
         
-        // Load posts and categories in parallel
+        // Use consistent posts per page value
+        const currentPostsPerPage = DEFAULT_POSTS_PER_PAGE;
+        
+        // Load posts, categories, and check ads in parallel
         const [postsResponse, categoriesData] = await Promise.all([
-          fetchBlogPosts(currentPage, postsPerPage),
+          fetchBlogPosts(currentPage, currentPostsPerPage),
           fetchBlogCategories()
         ]);
 
         if (postsResponse.success) {
           setBlogPosts(postsResponse.data);
           setPagination(postsResponse.pagination);
+          
+          // Debug logging for pagination
+          console.log('📄 Pagination data:', {
+            current_page: postsResponse.pagination.current_page,
+            has_more: postsResponse.pagination.has_more,
+            per_page: postsResponse.pagination.per_page,
+            total_posts: postsResponse.data.length
+          });
         }
         
         setCategories(['Semua', ...categoriesData]);
@@ -67,6 +83,22 @@ const BlogPageClient = () => {
 
     loadData();
   }, [currentPage]);
+
+  // Check if sidebar ads exist
+  useEffect(() => {
+    const checkSidebarAds = async () => {
+      try {
+        const sidebarAds = await AdsAPI.getAdsByPosition('sidebar');
+        const activeAds = sidebarAds.filter(isAdActive);
+        setHasSidebarAds(activeAds.length > 0);
+      } catch (error) {
+        console.error('Failed to check sidebar ads:', error);
+        setHasSidebarAds(false);
+      }
+    };
+
+    checkSidebarAds();
+  }, []);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -84,9 +116,37 @@ const BlogPageClient = () => {
   };
 
   const handlePageChange = (page: number) => {
+    setIsChangingPage(true);
     setCurrentPage(page);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    // Smooth scroll to top with a slight delay for better UX
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Reset loading state after scroll
+      setTimeout(() => setIsChangingPage(false), 300);
+    }, 100);
   };
+
+  // Keyboard navigation for pagination
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      // Only handle keyboard navigation when not typing in input fields
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
+      if (event.key === 'ArrowLeft' && currentPage > 1) {
+        event.preventDefault();
+        handlePageChange(currentPage - 1);
+      } else if (event.key === 'ArrowRight' && pagination?.has_more) {
+        event.preventDefault();
+        handlePageChange(currentPage + 1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [currentPage, pagination?.has_more]);
 
   if (loading) {
     return (
@@ -131,7 +191,7 @@ const BlogPageClient = () => {
         <section className="py-24 relative">
           <div className="relative max-w-full mx-auto px-6 sm:px-12 lg:px-20 xl:px-32">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-              {Array.from({ length: Math.min(6, postsPerPage || DEFAULT_POSTS_PER_PAGE) }, (_, i) => (
+              {Array.from({ length: DEFAULT_POSTS_PER_PAGE }, (_, i) => (
                 <div key={i} className="bg-white rounded-3xl shadow-xl overflow-hidden animate-pulse">
                   <div className="h-64 bg-gray-300"></div>
                   <div className="p-8">
@@ -151,6 +211,9 @@ const BlogPageClient = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30">
+      {/* Header Ad */}
+      <HeaderAd />
+
       {/* Hero Section */}
       <section className="relative pt-32 pb-24 overflow-hidden">
         <div className="absolute inset-0 overflow-hidden">
@@ -243,6 +306,7 @@ const BlogPageClient = () => {
               <p className="text-gray-600 mb-8 max-w-md mx-auto">
                 Artikel blog sedang dalam proses. Silakan kembali lagi nanti untuk membaca konten terbaru.
               </p>
+              
               <Link
                 href="/"
                 className="bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
@@ -281,42 +345,54 @@ const BlogPageClient = () => {
               {/* Blog Posts Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
                 {blogPosts.map((post, index) => (
-                  <article
-                    key={post.id}
-                    className="group relative"
-                  >
-                    <div className="relative bg-white/95 backdrop-blur-xl rounded-3xl shadow-xl overflow-hidden border border-white/60 transform group-hover:-translate-y-4 transition-all duration-700">
-                      <div className="relative h-64 overflow-hidden">
-                        {post.featuredImage ? (
-                          <img 
-                            src={post.featuredImage} 
-                            alt={post.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className={`absolute inset-0 ${
-                            index % 3 === 0 ? 'bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-700' :
-                            index % 3 === 1 ? 'bg-gradient-to-br from-green-500 via-teal-600 to-blue-700' :
-                            'bg-gradient-to-br from-orange-500 via-red-600 to-pink-700'
-                          }`}>
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <div className="text-center text-white">
-                                <div className="relative w-20 h-20 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20 shadow-2xl">
-                                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                  </svg>
+                  <div key={`post-${post.id}`}>
+                    {/* Insert ad after every 6th post, but only if sidebar ads exist */}
+                    {hasSidebarAds && index > 0 && index % 6 === 0 && (
+                      <div className="col-span-full mb-10">
+                        <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-xl border border-white/60 p-8">
+                          <div className="text-center mb-6">
+                            <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                              Advertisement
+                            </span>
+                          </div>
+                          <SidebarAd className="max-w-md mx-auto" maxAds={1} />
+                        </div>
+                      </div>
+                    )}
+                    
+                    <article className="group relative">
+                      <div className="relative bg-white/95 backdrop-blur-xl rounded-3xl shadow-xl overflow-hidden border border-white/60 transform group-hover:-translate-y-4 transition-all duration-700">
+                        <div className="relative h-64 overflow-hidden">
+                          {post.featuredImage ? (
+                            <img 
+                              src={post.featuredImage.replace(/http:\/\/localhost:8000/gi, process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_CMS_BASE_URL || 'http://localhost:8000')} 
+                              alt={post.title}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className={`absolute inset-0 ${
+                              index % 3 === 0 ? 'bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-700' :
+                              index % 3 === 1 ? 'bg-gradient-to-br from-green-500 via-teal-600 to-blue-700' :
+                              'bg-gradient-to-br from-orange-500 via-red-600 to-pink-700'
+                            }`}>
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="text-center text-white">
+                                  <div className="relative w-20 h-20 bg-white/10 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20 shadow-2xl">
+                                    <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        )}
-                        
-                        <div className="absolute top-6 left-6">
-                          <div className="px-4 py-2 rounded-full text-xs font-black shadow-xl border border-white/60 bg-white/95 text-blue-600">
-                            {post.category}
+                          )}
+                          
+                          <div className="absolute top-6 left-6">
+                            <div className="px-4 py-2 rounded-full text-xs font-black shadow-xl border border-white/60 bg-white/95 text-blue-600">
+                              {post.category}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
                       <div className="p-8">
                         <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 mb-6">
@@ -366,135 +442,62 @@ const BlogPageClient = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                           </svg>
                         </Link>
+                        </div>
                       </div>
-                    </div>
-                  </article>
+                    </article>
+                  </div>
                 ))}
               </div>
 
-              {/* Pagination - Professional & Elegant Design */}
+              {/* Professional Clean Pagination */}
               {blogPosts.length > 0 && (
-                <div className="flex flex-col items-center mt-20 space-y-6">
-                  {/* Pagination Navigation */}
-                  <nav className="flex items-center justify-center">
-                    <div className="flex items-center bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl border border-gray-100/50 p-2">
-                      {/* Previous Button */}
-                      <button 
-                        onClick={() => handlePageChange(currentPage - 1)}
-                        disabled={currentPage <= 1}
-                        className="group flex items-center px-4 py-3 text-gray-600 hover:text-blue-600 disabled:text-gray-300 disabled:cursor-not-allowed transition-all duration-300 rounded-xl hover:bg-blue-50/80"
+                <nav className="flex items-center justify-center mt-16 mb-8" aria-label="Pagination">
+                  <div className="flex items-center space-x-1">
+                    {/* Previous Button */}
+                    <button
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage <= 1 || isChangingPage}
+                      className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-200 ${
+                        currentPage <= 1 || isChangingPage
+                          ? 'text-gray-400 cursor-not-allowed'
+                          : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                      aria-label="Go to previous page"
+                    >
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                      </svg>
+                      Previous
+                    </button>
+
+                    {/* Page Numbers */}
+                    <div className="flex items-center space-x-1 mx-4">
+                      <span
+                        className="inline-flex items-center px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md"
+                        aria-current="page"
                       >
-                        <svg className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                        <span className="font-medium text-sm">Previous</span>
-                      </button>
-                      
-                      {/* Page Numbers */}
-                      <div className="flex items-center mx-2">
-                        {(() => {
-                          const maxPages = pagination?.last_page || Math.ceil(blogPosts.length / postsPerPage) || 1;
-                          const visiblePages = [];
-                          
-                          // Logic untuk menampilkan halaman yang relevan
-                          let startPage = Math.max(1, currentPage - 2);
-                          let endPage = Math.min(maxPages, currentPage + 2);
-                          
-                          // Adjust jika di awal atau akhir
-                          if (currentPage <= 3) {
-                            endPage = Math.min(5, maxPages);
-                          }
-                          if (currentPage > maxPages - 3) {
-                            startPage = Math.max(1, maxPages - 4);
-                          }
-                          
-                          // First page + ellipsis
-                          if (startPage > 1) {
-                            visiblePages.push(
-                              <button
-                                key={1}
-                                onClick={() => handlePageChange(1)}
-                                className="w-10 h-10 flex items-center justify-center text-sm font-semibold text-gray-700 hover:text-blue-600 hover:bg-blue-50/80 rounded-lg transition-all duration-300"
-                              >
-                                1
-                              </button>
-                            );
-                            if (startPage > 2) {
-                              visiblePages.push(
-                                <span key="ellipsis1" className="px-2 text-gray-400 text-sm">...</span>
-                              );
-                            }
-                          }
-                          
-                          // Main page numbers
-                          for (let i = startPage; i <= endPage; i++) {
-                            visiblePages.push(
-                              <button
-                                key={i}
-                                onClick={() => handlePageChange(i)}
-                                className={`w-10 h-10 flex items-center justify-center text-sm font-semibold rounded-lg transition-all duration-300 ${
-                                  currentPage === i
-                                    ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25'
-                                    : 'text-gray-700 hover:text-blue-600 hover:bg-blue-50/80'
-                                }`}
-                              >
-                                {i}
-                              </button>
-                            );
-                          }
-                          
-                          // Last page + ellipsis
-                          if (endPage < maxPages) {
-                            if (endPage < maxPages - 1) {
-                              visiblePages.push(
-                                <span key="ellipsis2" className="px-2 text-gray-400 text-sm">...</span>
-                              );
-                            }
-                            visiblePages.push(
-                              <button
-                                key={maxPages}
-                                onClick={() => handlePageChange(maxPages)}
-                                className="w-10 h-10 flex items-center justify-center text-sm font-semibold text-gray-700 hover:text-blue-600 hover:bg-blue-50/80 rounded-lg transition-all duration-300"
-                              >
-                                {maxPages}
-                              </button>
-                            );
-                          }
-                          
-                          return visiblePages;
-                        })()}
-                      </div>
-                      
-                      {/* Next Button */}
-                      <button 
-                        onClick={() => handlePageChange(currentPage + 1)}
-                        disabled={pagination ? currentPage >= pagination.last_page : false}
-                        className="group flex items-center px-4 py-3 text-gray-600 hover:text-blue-600 disabled:text-gray-300 disabled:cursor-not-allowed transition-all duration-300 rounded-xl hover:bg-blue-50/80"
-                      >
-                        <span className="font-medium text-sm">Next</span>
-                        <svg className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
+                        {currentPage}
+                      </span>
                     </div>
-                  </nav>
-                  
-                  {/* Pagination Info */}
-                  {pagination && (
-                    <div className="flex items-center justify-center space-x-6 text-sm text-gray-500">
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                        <span>
-                          Showing <span className="font-semibold text-gray-700">{((currentPage - 1) * postsPerPage) + 1}</span> to{' '}
-                          <span className="font-semibold text-gray-700">
-                            {Math.min(currentPage * postsPerPage, blogPosts.length)}
-                          </span> of{' '}
-                          <span className="font-semibold text-gray-700">{blogPosts.length}</span> articles
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
+
+                    {/* Next Button */}
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={!pagination?.has_more || isChangingPage}
+                      className={`inline-flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors duration-200 ${
+                        !pagination?.has_more || isChangingPage
+                          ? 'text-gray-400 cursor-not-allowed'
+                          : 'text-gray-700 hover:text-gray-900 hover:bg-gray-50'
+                      }`}
+                      aria-label="Go to next page"
+                    >
+                      Next
+                      <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  </div>
+                </nav>
               )}
             </>
           )}
