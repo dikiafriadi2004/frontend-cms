@@ -441,7 +441,7 @@ export default async function BlogPostPage({
                   
                   {/* Tags */}
                   {validatedPost.tags && validatedPost.tags.length > 0 && (
-                    <div className="border-t border-gray-200 pt-6 mt-8">
+                    <div className="border-t border-gray-200 pt-6 mt-20">
                       <h3 className="text-lg font-bold text-gray-900 mb-4">Tags</h3>
                       <div className="flex flex-wrap gap-2">
                         {validatedPost.tags.map((tag: any, index: number) => {

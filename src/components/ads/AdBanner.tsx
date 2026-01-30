@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
+import Script from 'next/script';
 import { AdsAPI, Ad, isAdActive } from '@/lib/ads-api';
 
 interface AdBannerProps {
@@ -9,130 +10,91 @@ interface AdBannerProps {
   maxAds?: number;
 }
 
-// AdSense Renderer Component
-const AdSenseRenderer = ({ code, adId }: { code: string; adId: string }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [loaded, setLoaded] = useState(false);
+// Safe AdSense Renderer using Next.js Script
+const SafeAdSenseRenderer = ({ code, adId }: { code: string; adId: string }) => {
+  const [scriptContent, setScriptContent] = useState<string>('');
+  const [insContent, setInsContent] = useState<string>('');
 
   useEffect(() => {
-    if (!containerRef.current || loaded) return;
-
     try {
-      // Create a temporary container to parse the HTML
+      // Parse the AdSense code safely
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = code;
       
-      // Extract script elements and ins elements
-      const scripts = tempDiv.querySelectorAll('script');
-      const insElements = tempDiv.querySelectorAll('ins');
+      // Extract ins elements
+      const insElements = tempDiv.querySelectorAll('ins.adsbygoogle');
+      if (insElements.length > 0) {
+        setInsContent(insElements[0].outerHTML);
+      }
       
-      // Clear the container and add the ins elements
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
-        
-        // Add ins elements
-        insElements.forEach(ins => {
-          containerRef.current?.appendChild(ins.cloneNode(true));
-        });
-        
-        // Load AdSense script if not already loaded
-        if (!(window as any).adsbygoogle) {
-          const adSenseScript = document.createElement('script');
-          adSenseScript.async = true;
-          adSenseScript.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js';
-          adSenseScript.crossOrigin = 'anonymous';
-          document.head.appendChild(adSenseScript);
+      // Extract script content
+      const scripts = tempDiv.querySelectorAll('script');
+      scripts.forEach(script => {
+        if (script.textContent && script.textContent.includes('adsbygoogle')) {
+          setScriptContent(script.textContent);
         }
-        
-        // Execute inline scripts
-        scripts.forEach(script => {
-          if (script.src) {
-            // External script
-            const newScript = document.createElement('script');
-            newScript.src = script.src;
-            newScript.async = true;
-            if (script.crossOrigin) newScript.crossOrigin = script.crossOrigin;
-            document.head.appendChild(newScript);
-          } else if (script.textContent) {
-            // Inline script
-            try {
-              eval(script.textContent);
-            } catch (error) {
-              console.warn('Failed to execute AdSense script:', error);
-            }
-          }
-        });
-        
-        setLoaded(true);
-      }
+      });
     } catch (error) {
-      console.error('Failed to render AdSense ad:', error);
+      console.warn('Failed to parse AdSense code:', error);
     }
-  }, [code, adId, loaded]);
+  }, [code]);
 
-  return <div ref={containerRef} className="adsense-ad-container" />;
+  return (
+    <div className="adsense-ad-container">
+      {insContent && (
+        <div dangerouslySetInnerHTML={{ __html: insContent }} />
+      )}
+      {scriptContent && (
+        <Script id={`adsense-${adId}`} strategy="afterInteractive">
+          {scriptContent}
+        </Script>
+      )}
+    </div>
+  );
 };
 
-// Adsera Renderer Component
-const AdseraRenderer = ({ code, adId }: { code: string; adId: string }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [loaded, setLoaded] = useState(false);
+// Safe Adsera Renderer using Next.js Script
+const SafeAdseraRenderer = ({ code, adId }: { code: string; adId: string }) => {
+  const [scriptContent, setScriptContent] = useState<string>('');
+  const [divContent, setDivContent] = useState<string>('');
 
   useEffect(() => {
-    if (!containerRef.current || loaded) return;
-
     try {
-      // Create a temporary container to parse the HTML
+      // Parse the Adsera code safely
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = code;
       
-      // Extract script elements and div elements
-      const scripts = tempDiv.querySelectorAll('script');
+      // Extract div elements
       const divElements = tempDiv.querySelectorAll('div');
-      
-      // Clear the container and add the div elements
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
-        
-        // Add div elements
-        divElements.forEach(div => {
-          containerRef.current?.appendChild(div.cloneNode(true));
-        });
-        
-        // Execute scripts
-        scripts.forEach(script => {
-          if (script.src) {
-            // External script
-            const newScript = document.createElement('script');
-            newScript.src = script.src;
-            newScript.async = true;
-            newScript.type = 'text/javascript';
-            document.head.appendChild(newScript);
-          } else if (script.textContent) {
-            // Inline script
-            try {
-              eval(script.textContent);
-            } catch (error) {
-              console.warn('Failed to execute Adsera script:', error);
-            }
-          }
-        });
-        
-        setLoaded(true);
+      if (divElements.length > 0) {
+        setDivContent(divElements[0].outerHTML);
       }
+      
+      // Extract script content
+      const scripts = tempDiv.querySelectorAll('script');
+      scripts.forEach(script => {
+        if (script.textContent) {
+          setScriptContent(script.textContent);
+        }
+      });
     } catch (error) {
-      console.error('Failed to render Adsera ad:', error);
+      console.warn('Failed to parse Adsera code:', error);
     }
-  }, [code, adId, loaded]);
+  }, [code]);
 
-  return <div ref={containerRef} className="adsera-ad-container" />;
+  return (
+    <div className="adsera-ad-container">
+      {divContent && (
+        <div dangerouslySetInnerHTML={{ __html: divContent }} />
+      )}
+      {scriptContent && (
+        <Script id={`adsera-${adId}`} strategy="afterInteractive">
+          {scriptContent}
+        </Script>
+      )}
+    </div>
+  );
 };
-
-interface AdBannerProps {
-  position: string;
-  className?: string;
-  maxAds?: number;
-}
 
 const AdBanner = ({ position, className = '', maxAds = 1 }: AdBannerProps) => {
   const [ads, setAds] = useState<Ad[]>([]);
@@ -298,7 +260,7 @@ const AdBanner = ({ position, className = '', maxAds = 1 }: AdBannerProps) => {
                 <span className="text-xs text-gray-500">Advertisement</span>
               </div>
               <div className="adsense-container">
-                <AdSenseRenderer code={ad.code} adId={ad.id.toString()} />
+                <SafeAdSenseRenderer code={ad.code} adId={ad.id.toString()} />
               </div>
             </div>
           )}
@@ -310,7 +272,7 @@ const AdBanner = ({ position, className = '', maxAds = 1 }: AdBannerProps) => {
                 <span className="text-xs text-gray-500">Advertisement</span>
               </div>
               <div className="adsera-container">
-                <AdseraRenderer code={ad.code} adId={ad.id.toString()} />
+                <SafeAdseraRenderer code={ad.code} adId={ad.id.toString()} />
               </div>
             </div>
           )}

@@ -5,9 +5,10 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 import { ApiProvider } from '@/contexts/ApiContext';
 import { AdsProvider } from '@/contexts/AdsContext';
-import DynamicMetadata from '@/components/SEO/DynamicMetadata';
+import SafeMetadata from '@/components/SafeMetadata';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { Analytics } from '@/components/analytics';
+import ClientNavigation from '@/components/ClientNavigation';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,14 +33,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id">
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <ErrorBoundary>
           <ApiProvider>
             <AdsProvider>
-              <DynamicMetadata />
+              <SafeMetadata />
               <Analytics />
+              <ClientNavigation />
               <Header />
               {children}
               <Footer />
