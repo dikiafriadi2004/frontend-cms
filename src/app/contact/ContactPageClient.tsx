@@ -2,6 +2,7 @@
 
 import { useSettings } from '@/contexts/ApiContext';
 import { useState } from 'react';
+import { formatPhoneNumber } from '@/lib/phone-formatter';
 
 const ContactPageClient = () => {
   const { settings, companySettings } = useSettings();
@@ -395,7 +396,7 @@ const ContactPageClient = () => {
                   
                   <div className="space-y-6">
                     {/* Email */}
-                    {settings?.contact?.email && (
+                    {settings?.contact_email && (
                       <div className="group flex items-start space-x-4 p-4 rounded-2xl hover:bg-blue-50/50 transition-all duration-300">
                         <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform duration-300">
                           <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -404,15 +405,15 @@ const ContactPageClient = () => {
                         </div>
                         <div>
                           <h4 className="text-lg font-black text-gray-900 mb-2">Email</h4>
-                          <a href={`mailto:${settings.contact.email}`} className="text-blue-600 font-semibold hover:text-blue-700 transition-colors">
-                            {settings.contact.email}
+                          <a href={`mailto:${settings.contact_email}`} className="text-blue-600 font-semibold hover:text-blue-700 transition-colors">
+                            {settings.contact_email}
                           </a>
                         </div>
                       </div>
                     )}
 
                     {/* Phone */}
-                    {settings?.contact?.phone && (
+                    {settings?.contact_phone && (
                       <div className="group flex items-start space-x-4 p-4 rounded-2xl hover:bg-green-50/50 transition-all duration-300">
                         <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform duration-300">
                           <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -421,15 +422,15 @@ const ContactPageClient = () => {
                         </div>
                         <div>
                           <h4 className="text-lg font-black text-gray-900 mb-2">Telepon</h4>
-                          <a href={`tel:${settings.contact.phone}`} className="text-green-600 font-semibold hover:text-green-700 transition-colors">
-                            {settings.contact.phone}
+                          <a href={`tel:${settings.contact_phone}`} className="text-green-600 font-semibold hover:text-green-700 transition-colors">
+                            {formatPhoneNumber(settings.contact_phone)}
                           </a>
                         </div>
                       </div>
                     )}
 
                     {/* WhatsApp */}
-                    {settings?.contact?.whatsapp && (
+                    {settings?.cta_whatsapp_number && (
                       <div className="group flex items-start space-x-4 p-4 rounded-2xl hover:bg-green-50/50 transition-all duration-300">
                         <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform duration-300">
                           <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -439,12 +440,12 @@ const ContactPageClient = () => {
                         <div>
                           <h4 className="text-lg font-black text-gray-900 mb-2">WhatsApp</h4>
                           <a 
-                            href={`https://wa.me/${settings.contact.whatsapp.replace(/[^0-9]/g, '')}`} 
+                            href={`https://wa.me/${settings.cta_whatsapp_number.replace(/[^0-9]/g, '')}`} 
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-green-600 font-semibold hover:text-green-700 transition-colors"
                           >
-                            {settings.contact.whatsapp}
+                            {formatPhoneNumber(settings.cta_whatsapp_number)}
                           </a>
                           <p className="text-sm text-gray-500 font-medium mt-1">Chat langsung dengan tim support</p>
                         </div>
@@ -452,7 +453,7 @@ const ContactPageClient = () => {
                     )}
 
                     {/* Address */}
-                    {settings?.contact?.address && (
+                    {settings?.company_address && (
                       <div className="group flex items-start space-x-4 p-4 rounded-2xl hover:bg-red-50/50 transition-all duration-300">
                         <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform duration-300">
                           <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -463,7 +464,7 @@ const ContactPageClient = () => {
                         <div>
                           <h4 className="text-lg font-black text-gray-900 mb-2">Alamat Kantor</h4>
                           <p className="text-red-600 font-semibold">
-                            {settings.contact.address}
+                            {settings.company_address}
                           </p>
                         </div>
                       </div>
